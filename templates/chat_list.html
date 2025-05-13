@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Мои чаты</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f0f2f5;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+
+        .back-button {
+            background: #1877f2;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            text-decoration: none;
+        }
+
+        .chats-list {
+            display: grid;
+            gap: 15px;
+        }
+
+        .chat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .chat-name {
+            font-size: 18px;
+            font-weight: bold;
+            color: #1c1e21;
+        }
+
+        .open-chat-button {
+            background: #42b72a;
+            color: white;
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .no-chats {
+            text-align: center;
+            color: #65676b;
+            padding: 40px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Мои чаты</h1>
+            <a href="/chat" class="back-button">← Назад в чат</a>
+        </div>
+
+        <div id="chatsContainer" class="chats-list">
+            <!-- Чаты будут загружены здесь -->
+        </div>
+
+        <div id="loadingStatus" class="no-chats">Загрузка...</div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:8000';
+
+        // Проверка авторизации
+        if (!localStorage.getItem('access_token')) {
+            window.location.href = '/login';
+        }
+
+        // Загрузка чатов
+        async function loadChats() {
+            try {
+                const response = await fetch(`${API_URL}/chats/`, {
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+                    }
+                });
+
+                if (!response.ok) {
+                    if (response.status === 401) {
+                        localStorage.removeItem('access_token');
+                        window.location.href = '/login';
+                    }
+                    throw new Error('Ошибка загрузки');
+                }
+
+                const chats = await response.json();
+                renderChats(chats);
+            } catch (error) {
+                document.getElementById('loadingStatus').textContent = 'Ошибка загрузки чатов';
+                console.error(error);
+            }
+        }
+
+        // Отрисовка чатов
+        function renderChats(chats) {
+            const container = document.getElementById('chatsContainer');
+            const status = document.getElementById('loadingStatus');
+
+            if (chats.length === 0) {
+                status.textContent = 'У вас пока нет чатов';
+                return;
+            }
+
+            status.style.display = 'none';
+            container.innerHTML = chats.map(chat => `
+                <div class="chat-card">
+                    <div class="chat-info">
+                        <div class="chat-name">${chat.name}</div>
+                        <div class="chat-members">Участников: ${chat.members?.length || 1}</div>
+                    </div>
+                    <button 
+                        class="open-chat-button" 
+                        onclick="location.href='/chat/${chat.id}'"
+                    >
+                        Открыть
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        // Инициализация
+        window.addEventListener('load', loadChats);
+    </script>
+</body>
+</html>

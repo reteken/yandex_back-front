@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Chat Room</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #f0f2f5;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            padding: 10px;
+            background: #fff;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        #userInfo {
+            flex-grow: 1;
+        }
+
+        #username {
+            font-weight: bold;
+            color: #1877f2;
+        }
+
+        button {
+            padding: 8px 16px;
+            background: #1877f2;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .chat-messages {
+            height: 60vh;
+            overflow-y: auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .message {
+            margin: 10px 0;
+            padding: 10px;
+            background: #f0f2f5;
+            border-radius: 8px;
+        }
+
+        .message.anonymous {
+            background: #e9ecef;
+        }
+
+        .sender {
+            font-weight: bold;
+            color: #1877f2;
+            margin-right: 10px;
+        }
+
+        .time {
+            color: #666;
+            font-size: 0.8em;
+            margin-left: 10px;
+        }
+
+        .chat-input {
+            display: flex;
+            gap: 10px;
+        }
+
+        #messageInput {
+            flex-grow: 1;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            width: 300px;
+        }
+
+        .modal-close {
+            float: right;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .anonymous-checkbox {
+            margin: 10px 0;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div id="userInfo">
+                <span id="username">Гость</span>
+                <button onclick="logout()">Выйти</button>
+            </div>
+            <button onclick="window.location.href='/chat_list'">Мои чаты</button>
+            <button onclick="showCreateChatModal()">Создать чат</button>
+        </div>
+
+        <div class="chat-messages" id="messages"></div>
+
+        <div class="chat-input">
+            <input type="text" id="messageInput" placeholder="Введите сообщение...">
+            <div class="anonymous-checkbox">
+                <input type="checkbox" id="anonymousCheckbox">
+                <label>Анонимно</label>
+            </div>
+            <button onclick="sendMessage()">Отправить</button>
+        </div>
+    </div>
+
+    <!-- Модальное окно создания чата -->
+    <div id="createChatModal" class="modal">
+        <div class="modal-content">
+            <span class="modal-close" onclick="closeCreateChatModal()">&times;</span>
+            <h3>Создать новый чат</h3>
+            <input type="text" id="newChatName" placeholder="Название чата" style="width: 100%; margin: 10px 0;">
+            <button onclick="createNewChat()" style="width: 100%">Создать</button>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:8000';
+        
+        // Инициализация имени пользователя
+        document.getElementById('username').textContent = 
+            localStorage.getItem('username') || 'Гость';
+
+        // Отправка сообщения
+        async function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+            if (!message) return;
+
+            const isAnonymous = document.getElementById('anonymousCheckbox').checked 
+                || !localStorage.getItem('access_token');
+
+            try {
+                const response = await fetch(`${API_URL}/send_message`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('access_token') || ''}`
+                    },
+                    body: JSON.stringify({
+                        content: message,
+                        is_anonymous: isAnonymous,
+                        chat_id: 1
+                    })
+                });
+
+                if (response.ok) {
+                    input.value = '';
+                } else {
+                    alert('Ошибка отправки!');
+                }
+            } catch (error) {
+                console.error('Ошибка:', error);
+            }
+        }
+
+        // Загрузка сообщений
+        async function loadMessages() {
+            try {
+                const response = await fetch(`${API_URL}/messages`);
+                const messages = await response.json();
+                const container = document.getElementById('messages');
+                
+                container.innerHTML = messages.map(msg => `
+                    <div class="message ${msg.sender === 'Anonymous' ? 'anonymous' : ''}">
+                        <span class="sender">${msg.sender}:</span>
+                        <span class="content">${msg.content}</span>
+                        <span class="time">${new Date(msg.timestamp).toLocaleTimeString()}</span>
+                    </div>
+                `).join('');
+
+                container.scrollTop = container.scrollHeight;
+            } catch (error) {
+                console.error('Ошибка загрузки:', error);
+            }
+        }
+
+        // Создание чата
+        async function createNewChat() {
+            const chatName = document.getElementById('newChatName').value.trim();
+            if (!chatName) return;
+
+            if (!localStorage.getItem('access_token')) {
+                alert('Для создания чата войдите в аккаунт!');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_URL}/chats/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+                    },
+                    body: JSON.stringify({ name: chatName })
+                });
+
+                if (response.ok) {
+                    closeCreateChatModal();
+                    alert('Чат создан!');
+                    window.location.href = '/chat_list';
+                } else {
+                    const error = await response.json();
+                    alert(error.detail);
+                }
+            } catch (error) {
+                console.error('Ошибка:', error);
+            }
+        }
+
+        // Управление модальным окном
+        function showCreateChatModal() {
+            document.getElementById('createChatModal').style.display = 'flex';
+        }
+
+        function closeCreateChatModal() {
+            document.getElementById('createChatModal').style.display = 'none';
+        }
+
+        // Выход
+        function logout() {
+            localStorage.clear();
+            window.location.href = '/';
+        }
+
+        // Автообновление сообщений
+        setInterval(loadMessages, 2000);
+        loadMessages();
+    </script>
+</body>
+</html>

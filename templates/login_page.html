@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login</title>
+    <link rel="stylesheet" href="/static/css/login_page.css">
+    <script src="/static/js/login_page.js" defer></script>
+</head>
+<body>
+  <div class="background">
+    <section class="layers">
+        <div class="layers__container">
+            <div class="layers__item layer-1" style="background-image: url(/static/img/layer-1.jpg);"></div>
+            <div class="layers__item layer-2" style="background-image: url(/static/img/layer-2.png);"></div>
+            <div class="layers__item layer-5" style="background-image: url(/static/img/layer-5.png);"></div>
+            <div class="layers__item layer-6" style="background-image: url(/static/img/layer-6.png);"></div>
+        </div>
+    </section>
+  </div>
+    
+    <div class="slider-container">
+        <div class="slider-arrow left-arrow">
+            <div class="arrow-circle">←</div>
+        </div>
+        
+        <div class="slider-wrapper">
+            <div class="slider">
+                <div class="slide">
+                    <form id="registerForm" class="form-container">
+                        <h2>Sign Up</h2>
+                        <div class="input-group">
+                            <label for="regUsername">Name</label>
+                            <input type="text" id="regUsername" class="input-field" required>
+                        </div>
+                        <div class="input-group">
+                            <label for="regPassword">Password</label>
+                            <input type="password" id="regPassword" class="input-field" required>
+                        </div>
+                        <button type="submit" class="entry-button">Entry</button>
+                    </form>
+                </div>
+                
+                <div class="slide active">
+                    <form id="loginForm" class="form-container">
+                        <h2>Login</h2>
+                        <div class="input-group">
+                            <label for="loginUsername">Name</label>
+                            <input type="text" id="loginUsername" class="input-field" required>
+                        </div>
+                        <div class="input-group">
+                            <label for="loginPassword">Password</label>
+                            <input type="password" id="loginPassword" class="input-field" required>
+                        </div>
+                        <button type="submit" class="entry-button">Entry</button>
+                    </form>
+                </div>
+                
+                <div class="slide">
+                    <div class="form-container anonymous">
+                        <h2>Anonymous</h2>
+                        <p class="anonymous-text">Attention: Your chats may not be saved in anonymous mode</p>
+                        <button type="button" class="entry-button" id="anonymousLogin">Entry</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="slider-dots">
+                <span class="dot" data-slide="0"></span>
+                <span class="dot active" data-slide="1"></span>
+                <span class="dot" data-slide="2"></span>
+            </div>
+        </div>
+        
+        <div class="slider-arrow right-arrow">
+            <div class="arrow-circle">→</div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:8000';
+
+        // Регистрация
+        document.getElementById('registerForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('regUsername').value.trim();
+            const password = document.getElementById('regPassword').value.trim();
+
+            const response = await fetch(`${API_URL}/register`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            });
+
+            if (response.ok) {
+                alert('Регистрация успешна!');
+                window.location.href = '/login';
+            } else {
+                const error = await response.json();
+                alert(error.detail);
+            }
+        });
+
+        // Авторизация (исправлено сохранение токена)
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('loginUsername').value.trim();
+            const password = document.getElementById('loginPassword').value.trim();
+
+            const response = await fetch(`${API_URL}/login`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                localStorage.setItem('access_token', data.access_token); // Токен
+                localStorage.setItem('username', data.username); // Имя пользователя
+                window.location.href = '/chat';
+            } else {
+                alert('Ошибка входа!');
+            }
+        });
+
+        // Анонимный вход
+        document.getElementById('anonymousLogin').addEventListener('click', async () => {
+            const response = await fetch(`${API_URL}/anonymous`);
+            if (response.ok) {
+                const data = await response.json();
+                localStorage.setItem('guest_id', data.guest_id);
+                window.location.href = '/chat';
+            }
+        });
+    </script>
+</body>
+</html>
