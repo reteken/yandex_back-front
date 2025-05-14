@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    container_name: pts-chat-app
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./:/app
+      - ./data:/app/data
+    environment:
+      - SECRET_KEY=your-secret-key-123
+      - ACCESS_TOKEN_EXPIRE_MINUTES=30
+    restart: always
+
+  nginx:
+    image: nginx:alpine
+    container_name: pts-chat-nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf
+      - ./static:/usr/share/nginx/html/static
+    depends_on:
+      - app
+    restart: always

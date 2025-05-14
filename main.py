@@ -23,6 +23,9 @@ import asyncio
 from starlette.background import BackgroundTask
 from contextlib import asynccontextmanager
 
+from fastapi import Body, Query, status
+from pydantic import BaseModel, Field
+
 from database import SessionLocal, init_db
 from models import User, Message, Chat, Base
 from schemas import UserCreate, ChatCreate, MessageCreate
@@ -108,7 +111,6 @@ async def get_current_user(
 class EventManager:
     @staticmethod
     async def register(chat_id: int) -> asyncio.Queue:
-        """Register a new client connection for a specific chat"""
         if chat_id not in connected_clients:
             connected_clients[chat_id] = []
 
@@ -121,22 +123,20 @@ class EventManager:
 
     @staticmethod
     def disconnect(queue: asyncio.Queue, chat_id: int) -> None:
-        """Remove a client's queue when they disconnect"""
         if chat_id in connected_clients and queue in connected_clients[chat_id]:
             connected_clients[chat_id].remove(queue)
             logger.info(
-                f"Client disconnected from chat {chat_id}. Remaining clients: {len(connected_clients[chat_id])}"
+                f"Человек отсоединился с чата {chat_id}. Осталось: {len(connected_clients[chat_id])}"
             )
 
     @staticmethod
     async def broadcast(message: dict, chat_id: int) -> None:
-        """Send a message to all connected clients for a specific chat"""
         if chat_id not in connected_clients:
             return
 
         formatted_message = f"data: {json.dumps(message)}\n\n"
         logger.info(
-            f"Broadcasting to {len(connected_clients[chat_id])} clients in chat {chat_id}"
+            f"транслируется to {len(connected_clients[chat_id])} человек в чате {chat_id}"
         )
 
         for queue in connected_clients[chat_id]:
@@ -161,7 +161,24 @@ async def chat_page(request: Request):
     return templates.TemplateResponse("main_page.html", {"request": request})
 
 
-@app.post("/register")
+@app.post(
+    "/register",
+    response_model=dict,
+    summary="Регистрация нового пользователя",
+    description="Создает нового пользователя и добавляет его в общий чат",
+    responses={
+        200: {
+            "description": "Успешная регистрация",
+            "content": {
+                "example": {"access_token": "jwt.token", "token_type": "bearer"}
+            },
+        },
+        400: {
+            "description": "Пользователь уже существует",
+            "content": {"example": {"detail": "Username already exists"}},
+        },
+    },
+)
 async def register(user: UserCreate, db: Session = Depends(get_db)):
     if db.query(User).filter(User.username == user.username).first():
         raise HTTPException(status_code=400, detail="Username already exists")
@@ -229,9 +246,25 @@ async def get_chats(
     return all_chats
 
 
-@app.post("/send_message")
+@app.post(
+    "/send_message",
+    summary="Отправить сообщение в чат",
+    response_model=dict,
+    responses={
+        200: {
+            "description": "Сообщение отправлено",
+            "content": {"example": {"status": "ok"}},
+        },
+        404: {
+            "description": "Чат не найден",
+            "content": {"example": {"detail": "Chat not found"}},
+        },
+    },
+)
 async def send_message(
-    message: MessageCreate,
+    message: MessageCreate = Body(
+        ..., example={"content": "Привет!", "chat_id": 1, "is_anonymous": False}
+    ),
     db: Session = Depends(get_db),
     current_user: Optional[User] = Depends(get_current_user),
 ):
@@ -298,7 +331,6 @@ async def get_messages(chat_id: int = 1, db: Session = Depends(get_db)):
 
 @app.get("/events")
 async def event_stream(request: Request, chat_id: int = 1):
-    """SSE endpoint for real-time updates"""
 
     async def event_generator() -> AsyncGenerator[str, None]:
         queue = await event_manager.register(chat_id)
@@ -337,7 +369,7 @@ async def add_user_to_chat(
     db: Session = Depends(get_db),
 ):
     if not current_user:
-        raise HTTPException(status_code=401, detail="Authentication required")
+        raise HTTPException(status_code=401, detail="Authentication needed")
 
     chat = db.query(Chat).filter(Chat.id == chat_id).first()
     if not chat:
@@ -348,9 +380,9 @@ async def add_user_to_chat(
         raise HTTPException(status_code=404, detail="User not found")
 
     if user_to_add in chat.members:
-        return {"status": "User already in chat"}
+        return {"status": "User already here"}
 
     chat.members.append(user_to_add)
     db.commit()
 
-    return {"status": "User added to chat"}
+    return {"status": "User added"}
