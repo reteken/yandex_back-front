@@ -1,143 +1,148 @@
-const API_URL = 'http://localhost:8000';
-let currentChatId = null;
+document.addEventListener('DOMContentLoaded', function() {
+    // DOM elements
+    const sidebar = document.getElementById('sidebar');
+    const settingsBtn = document.getElementById('settingsBtn');
+    const settingsPanel = document.getElementById('settingsPanel');
+    const darkModeToggle = document.getElementById('darkModeToggle');
+    const backBtn = document.getElementById('backBtn');
+    const messageInput = document.getElementById('messageInput');
+    const sendBtn = document.getElementById('sendBtn');
+    const messagesContainer = document.getElementById('messages');
+    const chatList = document.getElementById('chatList');
+    const overlay = document.getElementById('overlay');
+    const body = document.body;
 
-const updateUserInfo = () => {
-  document.getElementById('currentUsername').textContent =
-    localStorage.getItem('username') || 'Гость';
-};
+    // Icons
+    const searchIcon = document.querySelector('.search-icon');
+    const settingsIcon = document.querySelector('.settings-btn');
+    const messagesBg = document.querySelector('.messages');
 
-const loadChats = async () => {
-  try {
-    const response = await fetch(`${API_URL}/chats/`, {
-      headers: {
-        'Authorization': `Bearer ${localStorage.getItem('access_token')}`
-      }
+    // Set initial icons and background
+    function setInitialAssets() {
+        const isDarkMode = body.classList.contains('dark-mode');
+        
+        // Set search icon
+        searchIcon.style.backgroundImage = `url('${isDarkMode ? 'img/search_white.png' : 'img/search.png'}')`;
+        
+        // Set settings icon
+        settingsIcon.style.backgroundImage = `url('${isDarkMode ? 'img/settings_white.png' : 'img/settings.png'}')`;
+        
+        // Set background
+        messagesBg.style.backgroundImage = `url('${isDarkMode ? 'img/background.jpg' : 'img/background_white.jpg'}')`;
+    }
+
+    // Toggle settings panel
+    settingsBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        settingsPanel.classList.toggle('open');
+        overlay.classList.toggle('active');
     });
-    const chats = await response.json();
-    renderChats(chats);
-    if (chats.length > 0) openChat(chats[0].id);
-  } catch (error) {
-    console.error('Ошибка загрузки чатов:', error);
-  }
-};
 
-const renderChats = (chats) => {
-  const chatList = document.getElementById('chatList');
-  chatList.innerHTML = chats.map(chat => `
-    <div class="chat-item" data-chat-id="${chat.id}">
-      <div class="chat-item-avatar">${chat.name[0]}</div>
-      <div class="chat-item-info">
-        <div class="chat-item-name">${chat.name}</div>
-        <div class="chat-item-path">Участников: ${chat.members?.length || 1}</div>
-      </div>
-    </div>
-  `).join('');
+    // Close settings when clicking outside
+    function closeSettings() {
+        settingsPanel.classList.remove('open');
+        overlay.classList.remove('active');
+    }
 
-  // Назначить обработчики событий
-  document.querySelectorAll('.chat-item').forEach(item => {
-    item.addEventListener('click', () => openChat(item.dataset.chatId));
-  });
-};
+    overlay.addEventListener('click', closeSettings);
+    chatList.addEventListener('click', closeSettings);
 
-const openChat = (chatId) => {
-  currentChatId = chatId;
-  document.querySelectorAll('.chat-item').forEach(item => {
-    item.classList.remove('chat-item-active');
-    if (item.dataset.chatId === chatId) item.classList.add('chat-item-active');
-  });
-  document.getElementById('chatHeader').textContent = `Чат #${chatId}`;
-  loadMessages();
-};
-
-const loadMessages = async () => {
-  if (!currentChatId) return;
-  try {
-    const response = await fetch(`${API_URL}/messages?chat_id=${currentChatId}`);
-    const messages = await response.json();
-    renderMessages(messages);
-  } catch (error) {
-    console.error('Ошибка загрузки сообщений:', error);
-  }
-};
-
-const renderMessages = (messages) => {
-  const container = document.getElementById('messages');
-  container.innerHTML = messages.map(msg => `
-    <div class="message ${msg.sender === 'Anonymous' ? 'message-in' : 'message-out'}">
-      ${msg.sender !== 'Anonymous' ? `<div class="sender">${msg.sender}</div>` : ''}
-      ${msg.content}
-      <div class="time">${new Date(msg.timestamp).toLocaleTimeString()}</div>
-    </div>
-  `).join('');
-  container.scrollTop = container.scrollHeight;
-};
-
-const sendMessage = async () => {
-  const input = document.getElementById('messageInput');
-  const message = input.value.trim();
-  if (!message || !currentChatId) return;
-
-  const isAnonymous = document.getElementById('anonymousCheckbox')?.checked || !localStorage.getItem('access_token');
-
-  try {
-    await fetch(`${API_URL}/send_message`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('access_token') || ''}`
-      },
-      body: JSON.stringify({
-        content: message,
-        is_anonymous: isAnonymous,
-        chat_id: currentChatId
-      })
+    // Toggle dark mode
+    darkModeToggle.addEventListener('change', () => {
+        body.classList.toggle('dark-mode');
+        
+        // Update icons and background
+        const isDarkMode = body.classList.contains('dark-mode');
+        
+        searchIcon.style.backgroundImage = `url('${isDarkMode ? 'img/search_white.png' : 'img/search.png'}')`;
+        settingsIcon.style.backgroundImage = `url('${isDarkMode ? 'img/settings_white.png' : 'img/settings.png'}')`;
+        messagesBg.style.backgroundImage = `url('${isDarkMode ? 'img/background.jpg' : 'img/background_white.jpg'}')`;
+        
+        // Save preference to localStorage
+        localStorage.setItem('darkMode', isDarkMode);
     });
-    input.value = '';
-    loadMessages();
-  } catch (error) {
-    console.error('Ошибка отправки:', error);
-  }
-};
 
-const createNewChat = async () => {
-  const chatName = document.getElementById('newChatName').value.trim();
-  if (!chatName) return;
+    // Check for saved dark mode preference
+    if (localStorage.getItem('darkMode') === 'false') {
+        body.classList.remove('dark-mode');
+        darkModeToggle.checked = false;
+        
+        // Update icons and background if light mode
+        searchIcon.style.backgroundImage = "url('img/search.png')";
+        settingsIcon.style.backgroundImage = "url('img/settings.png')";
+        messagesBg.style.backgroundImage = "url('img/background_white.jpg')";
+    }
 
-  try {
-    await fetch(`${API_URL}/chats/`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('access_token')}`
-      },
-      body: JSON.stringify({ name: chatName })
+    // Set initial assets
+    setInitialAssets();
+
+    // Toggle sidebar on mobile
+    backBtn.addEventListener('click', () => {
+        sidebar.classList.toggle('open');
     });
-    closeCreateChatModal();
-    loadChats();
-  } catch (error) {
-    console.error('Ошибка создания чата:', error);
-  }
-};
 
-const showCreateChatModal = () => {
-  document.getElementById('createChatModal').style.display = 'block';
-};
+    // Send message
+    sendBtn.addEventListener('click', sendMessage);
+    messageInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            sendMessage();
+        }
+    });
 
-const closeCreateChatModal = () => {
-  document.getElementById('createChatModal').style.display = 'none';
-};
+    function sendMessage() {
+        const messageText = messageInput.value.trim();
+        if (messageText) {
+            // Add message to chat area
+            const messageElement = document.createElement('div');
+            messageElement.classList.add('message', 'message-out');
+            messageElement.textContent = messageText;
+            messagesContainer.appendChild(messageElement);
+            
+            // Add message to chat list preview
+            if (chatList.querySelector('.empty-state')) {
+                chatList.innerHTML = '';
+            }
+            
+            const chatItem = document.createElement('div');
+            chatItem.classList.add('chat-item');
+            chatItem.innerHTML = `
+                <div class="chat-item-avatar">Y</div>
+                <div class="chat-item-info">
+                    <div class="chat-item-name">You</div>
+                    <div class="chat-item-preview">${messageText}</div>
+                    <div class="chat-item-path">${body.classList.contains('dark-mode') ? 'C:\\Users\\You\\Messages #dark' : 'C:\\Users\\You\\Messages #light'}</div>
+                </div>
+            `;
+            chatList.prepend(chatItem);
+            
+            // Clear input
+            messageInput.value = '';
+            
+            // Scroll to bottom
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+    }
 
-const logout = () => {
-  localStorage.clear();
-  window.location.href = '/';
-};
+    // Responsive behavior
+    function handleResize() {
+        if (window.innerWidth <= 768) {
+            sidebar.classList.remove('open');
+        } else {
+            sidebar.classList.add('open');
+        }
+    }
 
-window.onload = () => {
-  updateUserInfo();
-  if (localStorage.getItem('access_token')) loadChats();
-  setInterval(loadMessages, 2000);
-  document.getElementById('sendBtn')?.addEventListener('click', sendMessage);
-  document.getElementById('messageInput')?.addEventListener('keypress', e => {
-    if (e.key === 'Enter') sendMessage();
-  });
-};
+    window.addEventListener('resize', handleResize);
+    handleResize(); // Initial check
+
+    // Sample chat interaction
+    document.querySelectorAll('.chat-item').forEach(item => {
+        item.addEventListener('click', function() {
+            const chatName = this.querySelector('.chat-item-name').textContent;
+            document.querySelector('.chat-title').textContent = chatName;
+            if (window.innerWidth <= 768) {
+                sidebar.classList.remove('open');
+            }
+        });
+    });
+});

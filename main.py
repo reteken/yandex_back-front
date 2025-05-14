@@ -30,16 +30,13 @@ from schemas import UserCreate, ChatCreate, MessageCreate
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Global dictionary to store connected clients for Server-Sent Events
 connected_clients: Dict[int, List[asyncio.Queue]] = {}
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Setup
     init_db()
 
-    # Create general chat if it doesn't exist
     with SessionLocal() as db:
         if not db.query(Chat).filter(Chat.id == 1).first():
             general_chat = Chat(id=1, name="General Chat")
@@ -48,28 +45,24 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    # Cleanup
     for chat_id in connected_clients:
         for queue in connected_clients[chat_id]:
-            await queue.put(None)  # Signal clients to close connections
+            await queue.put(None)
     connected_clients.clear()
 
 
 app = FastAPI(lifespan=lifespan)
 
-# Настройки JWT
 SECRET_KEY = "your-secret-key-123"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
-# Настройки шаблонов
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
 app.mount(
     "/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static"
 )
 
-# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -79,7 +72,6 @@ app.add_middleware(
     expose_headers=["*"],
 )
 
-# Зависимости
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token", auto_error=False)
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -113,7 +105,6 @@ async def get_current_user(
         return None
 
 
-# Server-Sent Events manager
 class EventManager:
     @staticmethod
     async def register(chat_id: int) -> asyncio.Queue:
@@ -121,7 +112,6 @@ class EventManager:
         if chat_id not in connected_clients:
             connected_clients[chat_id] = []
 
-        # Create a new queue for this client
         queue = asyncio.Queue()
         connected_clients[chat_id].append(queue)
         logger.info(
@@ -149,16 +139,13 @@ class EventManager:
             f"Broadcasting to {len(connected_clients[chat_id])} clients in chat {chat_id}"
         )
 
-        # Put the message in each client's queue
         for queue in connected_clients[chat_id]:
             await queue.put(formatted_message)
 
 
-# Create event manager instance
 event_manager = EventManager()
 
 
-# Роуты
 @app.get("/", response_class=HTMLResponse)
 async def main_page(request: Request):
     return templates.TemplateResponse("started_page.html", {"request": request})
@@ -184,7 +171,6 @@ async def register(user: UserCreate, db: Session = Depends(get_db)):
     db.add(new_user)
     db.commit()
 
-    # Add user to general chat
     general_chat = db.query(Chat).filter(Chat.id == 1).first()
     if general_chat:
         new_user.chats.append(general_chat)
@@ -229,7 +215,6 @@ async def create_chat(
     db.commit()
     db.refresh(new_chat)
 
-    # Add creator to the chat
     current_user.chats.append(new_chat)
     db.commit()
 
@@ -240,7 +225,6 @@ async def create_chat(
 async def get_chats(
     db: Session = Depends(get_db),
 ):
-    # Return all chats for all users
     all_chats = db.query(Chat).all()
     return all_chats
 
@@ -271,7 +255,6 @@ async def send_message(
     db.commit()
     db.refresh(new_message)
 
-    # Broadcast the message to all connected clients for this chat
     await event_manager.broadcast(
         {
             "sender": sender_name,
@@ -318,26 +301,21 @@ async def event_stream(request: Request, chat_id: int = 1):
     """SSE endpoint for real-time updates"""
 
     async def event_generator() -> AsyncGenerator[str, None]:
-        # Create a queue for this client
         queue = await event_manager.register(chat_id)
 
         try:
-            # Send a connection established message
             yield 'event: connected\ndata: {"status":"connected","chat_id":' + str(
                 chat_id
             ) + "}\n\n"
 
-            # Keep the connection open and yield messages as they come
             while True:
                 message = await queue.get()
-                if message is None:  # None is our signal to close
+                if message is None:
                     break
                 yield message
         except asyncio.CancelledError:
-            # Handle client disconnection
             logger.info("Client disconnected from event stream")
         finally:
-            # Clean up when the client disconnects
             event_manager.disconnect(queue, chat_id)
 
     return StreamingResponse(
@@ -346,12 +324,11 @@ async def event_stream(request: Request, chat_id: int = 1):
         headers={
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",  # Disable buffering for Nginx
+            "X-Accel-Buffering": "no",
         },
     )
 
 
-# Add user to chat endpoint
 @app.post("/chats/{chat_id}/add_user/{username}")
 async def add_user_to_chat(
     chat_id: int,
