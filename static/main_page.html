@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Telegram-like Chat</title>
+  <link rel="stylesheet" href="/static/css/main_page.css">
+  <script defer>
+    // Updated JavaScript with Server-Sent Events instead of WebSockets
+    const API_URL = 'http://localhost:8000';
+    let currentChatId = null;
+    let eventSource = null;
+
+    // Server-Sent Events initialization
+    const setupEventSource = () => {
+      if (eventSource) {
+        eventSource.close();
+      }
+      
+      const eventsUrl = `${API_URL}/events?chat_id=${currentChatId || 1}`;
+      console.log(`Connecting to SSE: ${eventsUrl}`);
+      
+      eventSource = new EventSource(eventsUrl);
+
+      eventSource.onopen = () => {
+        console.log('SSE connection opened');
+      };
+
+      eventSource.addEventListener('connected', (event) => {
+        console.log('SSE connection established', event.data);
+      });
+
+      eventSource.onmessage = (event) => {
+        console.log('Message received:', event.data);
+        try {
+          const newMessage = JSON.parse(event.data);
+          appendMessage(newMessage);
+        } catch (e) {
+          console.error('Error parsing message:', e);
+        }
+      };
+
+      eventSource.onerror = (error) => {
+        console.error('SSE error:', error);
+        eventSource.close();
+        
+        // Attempt to reconnect after a delay
+        setTimeout(() => {
+          if (currentChatId) {
+            setupEventSource();
+          }
+        }, 3000);
+      };
+    };
+
+    // Add a new message to the chat
+    const appendMessage = (msg) => {
+      const container = document.getElementById('messages');
+      const messageDiv = document.createElement('div');
+      messageDiv.className = `message ${msg.sender === localStorage.getItem('username') ? 'message-out' : 'message-in'}`;
+      
+      // Add sender name
+      const senderDiv = document.createElement('div');
+      senderDiv.className = 'sender';
+      senderDiv.textContent = msg.sender;
+      messageDiv.appendChild(senderDiv);
+      
+      // Add message content
+      const contentSpan = document.createElement('span');
+      contentSpan.textContent = msg.content;
+      messageDiv.appendChild(contentSpan);
+      
+      // Add timestamp
+      const timeDiv = document.createElement('div');
+      timeDiv.className = 'time';
+      timeDiv.textContent = new Date(msg.timestamp).toLocaleTimeString();
+      messageDiv.appendChild(timeDiv);
+      
+      container.appendChild(messageDiv);
+      container.scrollTop = container.scrollHeight;
+    };
+
+    // Send a message
+    const sendMessage = async () => {
+      const input = document.getElementById('messageInput');
+      const message = input.value.trim();
+      if (!message) return;
+
+      const isAnonymous = document.getElementById('anonymousCheckbox').checked 
+        || !localStorage.getItem('access_token');
+
+      try {
+        console.log('Sending message:', message);
+        
+        const response = await fetch(`${API_URL}/send_message`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('access_token') || ''}`
+          },
+          body: JSON.stringify({
+            content: message,
+            is_anonymous: isAnonymous,
+            chat_id: currentChatId || 1
+          })
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          console.error('Error sending message:', errorData);
+          alert('Failed to send message. Please try again.');
+          return;
+        }
+
+        console.log('Message sent successfully');
+        
+        // Clear the input field
+        input.value = '';
+      } catch (error) {
+        console.error('Error sending message:', error);
+        alert('Network error. Please check your connection and try again.');
+      }
+    };
+
+    // Load available chats
+    const loadChats = async () => {
+      try {
+        const token = localStorage.getItem('access_token');
+        
+        const response = await fetch(`${API_URL}/chats/`, {
+          headers: token ? { 
+            'Authorization': `Bearer ${token}`
+          } : {}
+        });
+        
+        if (!response.ok) {
+          console.error('Failed to load chats:', response.status);
+          openChat(1); // Fall back to general chat
+          return;
+        }
+        
+        const chats = await response.json();
+        console.log('Loaded chats:', chats);
+        
+        renderChats(chats);
+        if (chats.length > 0) {
+          openChat(chats[0].id);
+        } else {
+          openChat(1); // Fall back to general chat if no chats are available
+        }
+      } catch (error) {
+        console.error('Error loading chats:', error);
+        alert('Failed to load chats. Using general chat instead.');
+        openChat(1);
+      }
+    };
+
+    // Render the chat list in the sidebar
+    const renderChats = (chats) => {
+      const chatList = document.getElementById('chatList');
+      if (!chats || chats.length === 0) {
+        chatList.innerHTML = `
+          <div class="chat-item" onclick="openChat(1)" data-chat-id="1">
+            <div class="chat-item-avatar">G</div>
+            <div class="chat-item-info">
+              <div class="chat-item-name">General Chat</div>
+              <div class="chat-item-path">Default public chat</div>
+            </div>
+          </div>
+        `;
+        return;
+      }
+      
+      chatList.innerHTML = chats.map(chat => `
+        <div class="chat-item" onclick="openChat(${chat.id})" data-chat-id="${chat.id}">
+          <div class="chat-item-avatar">${chat.name[0]}</div>
+          <div class="chat-item-info">
+            <div class="chat-item-name">${chat.name}</div>
+            <div class="chat-item-path">Участников: ${chat.members?.length || 1}</div>
+          </div>
+        </div>
+      `).join('');
+    };
+
+    // Open a specific chat
+    const openChat = (chatId) => {
+      currentChatId = chatId;
+      document.querySelectorAll('.chat-item').forEach(item => {
+        item.classList.toggle('chat-item-active', item.dataset.chatId == chatId);
+      });
+      document.getElementById('chatHeader').textContent = `Чат #${chatId}`;
+      document.getElementById('messages').innerHTML = ''; // Clear messages
+      setupEventSource(); // Connect to SSE for the new chat
+      loadMessages(chatId);
+    };
+
+    // Load messages for the current chat
+    const loadMessages = async (chatId) => {
+      try {
+        const response = await fetch(`${API_URL}/messages?chat_id=${chatId}`);
+        if (!response.ok) {
+          console.error(`Failed to load messages for chat ${chatId}:`, response.status);
+          return;
+        }
+        
+        const messages = await response.json();
+        console.log(`Loaded ${messages.length} messages for chat ${chatId}`);
+        
+        const messagesContainer = document.getElementById('messages');
+        messagesContainer.innerHTML = '';
+        
+        messages.forEach(msg => {
+          appendMessage(msg);
+        });
+        
+        // Scroll to bottom
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+      } catch (error) {
+        console.error('Error loading messages:', error);
+      }
+    };
+
+    // Handle Enter key in the message input
+    const handleKeyPress = (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    };
+    
+    // Update the user info display
+    const updateUserInfo = () => {
+      const username = localStorage.getItem('username');
+      document.getElementById('currentUsername').textContent = username || 'Гость';
+      document.getElementById('settingsUsername').textContent = username || 'Гость';
+    };
+    
+    // Logout function
+    const logout = () => {
+      if (eventSource) {
+        eventSource.close();
+      }
+      localStorage.clear();
+      window.location.href = '/';
+    };
+    
+    // Create a new chat
+    const createNewChat = async () => {
+      const chatName = document.getElementById('newChatName').value.trim();
+      if (!chatName) {
+        alert('Пожалуйста, введите название чата');
+        return;
+      }
+      
+      try {
+        const token = localStorage.getItem('access_token');
+        if (!token) {
+          alert('Необходима авторизация для создания чата');
+          return;
+        }
+        
+        const response = await fetch(`${API_URL}/chats/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ name: chatName })
+        });
+        
+        if (!response.ok) {
+          alert('Ошибка при создании чата');
+          return;
+        }
+        
+        const newChat = await response.json();
+        closeCreateChatModal();
+        loadChats(); // Reload the chat list
+        openChat(newChat.id); // Open the newly created chat
+      } catch (error) {
+        console.error('Error creating chat:', error);
+        alert('Ошибка при создании чата');
+      }
+    };
+    
+    // Show the create chat modal
+    const showCreateChatModal = () => {
+      document.getElementById('createChatModal').style.display = 'block';
+    };
+    
+    // Close the create chat modal
+    const closeCreateChatModal = () => {
+      document.getElementById('createChatModal').style.display = 'none';
+      document.getElementById('newChatName').value = '';
+    };
+    
+    // Toggle settings panel
+    const toggleSettings = () => {
+      const settingsPanel = document.getElementById('settingsPanel');
+      settingsPanel.classList.toggle('active');
+    };
+    
+    // Toggle mobile sidebar
+    const toggleMobileSidebar = () => {
+      const sidebar = document.getElementById('sidebar');
+      sidebar.classList.toggle('mobile-active');
+    };
+
+    // Clean up function for when we leave the page
+    const cleanUp = () => {
+      if (eventSource) {
+        eventSource.close();
+      }
+    };
+
+    // Initialize the application
+    window.onload = () => {
+      // Set up event listeners
+      document.getElementById('sendBtn').addEventListener('click', sendMessage);
+      document.getElementById('messageInput').addEventListener('keypress', handleKeyPress);
+      document.getElementById('backBtn').addEventListener('click', toggleMobileSidebar);
+      document.getElementById('settingsBtn').addEventListener('click', toggleSettings);
+      document.getElementById('darkModeToggle').addEventListener('change', function() {
+        document.body.classList.toggle('dark-mode', this.checked);
+        localStorage.setItem('darkMode', this.checked ? 'true' : 'false');
+      });
+      
+      // Apply dark mode setting from local storage
+      const isDarkMode = localStorage.getItem('darkMode') !== 'false';
+      document.body.classList.toggle('dark-mode', isDarkMode);
+      document.getElementById('darkModeToggle').checked = isDarkMode;
+      
+      // Make functions available globally for onclick handlers
+      window.openChat = openChat;
+      window.showCreateChatModal = showCreateChatModal;
+      window.closeCreateChatModal = closeCreateChatModal;
+      window.createNewChat = createNewChat;
+      window.logout = logout;
+      
+      // Update UI and load data
+      updateUserInfo();
+      loadChats();
+      
+      // Set up responsive behavior
+      const handleResize = () => {
+        document.body.classList.toggle('mobile', window.innerWidth < 768);
+      };
+      
+      window.addEventListener('resize', handleResize);
+      window.addEventListener('beforeunload', cleanUp);
+      handleResize();
+      
+      console.log('Chat application initialized');
+    };
+  </script>
+  <style>
+    /* Fix for asset display and dark mode switching */
+    .dark-mode {
+      --bg-color: #1e2736;
+      --sidebar-bg: #17212b;
+      --header-bg: #242f3d;
+      --text-color: #fff;
+      --input-bg: #242f3d;
+      --msg-in-bg: #182533;
+      --msg-out-bg: #2b5278;
+      --hover-bg: #192a3a;
+    }
+    
+    body:not(.dark-mode) {
+      --bg-color: #e7ebf0;
+      --sidebar-bg: #ffffff;
+      --header-bg: #ffffff;
+      --text-color: #000;
+      --input-bg: #ffffff;
+      --msg-in-bg: #ffffff;
+      --msg-out-bg: #effdde;
+      --hover-bg: #f1f1f1;
+    }
+    
+    body {
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      height: 100vh;
+      overflow: hidden;
+    }
+    
+    /* Fix to ensure assets are used properly */
+    .search-icon {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      background-size: contain;
+      background-repeat: no-repeat;
+      background-position: center;
+      margin-right: 8px;
+    }
+    
+    .dark-mode .search-icon {
+      background-image: url('/static/img/search_white.png');
+    }
+    
+    body:not(.dark-mode) .search-icon {
+      background-image: url('/static/img/search.png');
+    }
+    
+    .settings-btn {
+      width: 30px;
+      height: 30px;
+      background-size: contain;
+      background-repeat: no-repeat;
+      background-position: center;
+      border: none;
+      background-color: transparent;
+      cursor: pointer;
+    }
+    
+    .dark-mode .settings-btn {
+      background-image: url('/static/img/settings_white.png');
+    }
+    
+    body:not(.dark-mode) .settings-btn {
+      background-image: url('/static/img/settings.png');
+    }
+    
+    /* Fix for creating new chat modal */
+    .chat-creator-modal {
+      display: none;
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background-color: var(--sidebar-bg);
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 0 20px rgba(0, 0, 0, 0.3);
+      z-index: 1000;
+      width: 300px;
+    }
+    
+    .chat-creator-modal h3 {
+      margin-top: 0;
+      color: var(--text-color);
+    }
+    
+    .chat-creator-modal input {
+      width: 100%;
+      padding: 10px;
+      margin: 10px 0;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      background-color: var(--input-bg);
+      color: var(--text-color);
+    }
+    
+    .modal-buttons {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 15px;
+    }
+    
+    .modal-button {
+      padding: 8px 15px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    
+    .modal-button.create {
+      background-color: #4eaa60;
+      color: white;
+    }
+    
+    .modal-button.cancel {
+      background-color: #ccc;
+      color: #333;
+    }
+    
+    /* Fix for user info bar */
+    .user-info-bar {
+      position: absolute;
+      top: 0;
+      right: 0;
+      padding: 5px 15px;
+      background-color: var(--header-bg);
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border-radius: 0 0 0 10px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    
+    .header-button {
+      background-color: transparent;
+      border: 1px solid var(--text-color);
+      color: var(--text-color);
+      padding: 5px 10px;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    
+    .header-button:hover {
+      background-color: var(--hover-bg);
+    }
+    
+    /* Fix for messages display */
+    .messages {
+      height: calc(100% - 110px);
+      overflow-y: auto;
+      padding: 15px;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    .message {
+      max-width: 70%;
+      margin-bottom: 10px;
+      padding: 10px;
+      border-radius: 10px;
+      position: relative;
+      word-wrap: break-word;
+    }
+    
+    .message-in {
+      align-self: flex-start;
+      background-color: var(--msg-in-bg);
+    }
+    
+    .message-out {
+      align-self: flex-end;
+      background-color: var(--msg-out-bg);
+    }
+    
+    .sender {
+      font-weight: bold;
+      margin-bottom: 5px;
+      font-size: 0.9em;
+    }
+    
+    .time {
+      font-size: 0.7em;
+      opacity: 0.7;
+      text-align: right;
+      margin-top: 5px;
+    }
+  </style>
+</head>
+<body class="dark-mode">
+  <div class="assets" style="display:none;">
+    <img id="search-icon-light" src="/static/img/search.png" alt="Search Icon">
+    <img id="search-icon-dark" src="/static/img/search_white.png" alt="Search Icon White">
+    <img id="settings-icon-light" src="/static/img/settings.png" alt="Settings Icon">
+    <img id="settings-icon-dark" src="/static/img/settings_white.png" alt="Settings Icon White">
+    <img id="bg-light" src="/static/img/background_white.jpg" alt="Light Background">
+    <img id="bg-dark" src="/static/img/background.jpg" alt="Dark Background">
+  </div>
+
+  <div class="user-info-bar">
+    <span id="currentUsername">Гость</span>
+    <button onclick="logout()" class="header-button">Выйти</button>
+    <button onclick="showCreateChatModal()" class="header-button">Создать чат</button>
+  </div>
+
+  <div class="chat-container">
+    <div class="sidebar" id="sidebar">
+      <div class="search-bar">
+        <span class="search-icon"></span>
+        <input type="text" placeholder="Search">
+        <button class="settings-btn" id="settingsBtn"></button>
+      </div>
+      <div class="chat-list" id="chatList">
+        <!-- Chat list will be populated by JavaScript -->
+      </div>
+      <div class="settings-panel" id="settingsPanel">
+        <div class="settings-item">
+          <div class="settings-title">Name</div>
+          <div id="settingsUsername">User Name</div>
+        </div>
+        <div class="settings-item">
+          <div class="settings-title">Night Mode</div>
+          <label class="switch">
+            <input type="checkbox" id="darkModeToggle" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <div class="chat-area">
+      <div class="chat-header">
+        <button class="back-btn" id="backBtn">←</button>
+        <div class="chat-title" id="chatHeader">Выберите чат</div>
+        <div></div>
+      </div>
+
+      <div class="messages" id="messages">
+        <!-- Messages will be loaded here -->
+      </div>
+
+      <div class="message-input">
+        <input type="text" placeholder="Введите сообщение..." id="messageInput">
+        <label style="display: flex; align-items: center; gap: 5px; margin-left: 10px;">
+          <input type="checkbox" id="anonymousCheckbox">
+          Анонимно
+        </label>
+        <button class="send-btn" id="sendBtn">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+            <path d="M22 2L11 13" stroke="white" stroke-width="2" stroke-linecap="round"/>
+            <path d="M22 2L15 22L11 13L2 9L22 2Z" fill="white"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="chat-creator-modal" id="createChatModal">
+    <h3>Создать чат</h3>
+    <input type="text" id="newChatName" placeholder="Название чата">
+    <div class="modal-buttons">
+      <button onclick="createNewChat()" class="modal-button create">Создать</button>
+      <button onclick="closeCreateChatModal()" class="modal-button cancel">Отмена</button>
+    </div>
+  </div>
+</body>
+</html>

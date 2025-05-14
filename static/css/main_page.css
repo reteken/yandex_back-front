@@ -1,0 +1,393 @@
+@font-face {
+    font-family: squids game;
+    src: url(../fonts/Game\ Of\ Squids.woff2);
+    font-style: normal;
+    font-display: swap;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: squids game;
+    transition: all 0.3s ease;
+}
+
+body {
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+    --sidebar-bg: #182229;
+    --chat-bg: #0b141a;
+    --input-bg: #202c33;
+    --text-color: #e9edef;
+    --message-bg: #202c33;
+    --message-out-bg: #d30090;
+    --settings-bg: #111b21;
+    --button-color: #53bdeb;
+    --send-button: #ff5c8d;
+    --border-color: #303d45;
+    --path-color: #aaa;
+    background-color: var(--chat-bg);
+}
+
+body:not(.dark-mode) {
+    --sidebar-bg: #f0f2f5;
+    --chat-bg: #e5ddd5;
+    --input-bg: #f0f2f5;
+    --text-color: #000;
+    --message-bg: #ffffff;
+    --message-out-bg: #68fdd8;
+    --settings-bg: #ffffff;
+    --button-color: #0088cc;
+    --border-color: #e9edef;
+    --path-color: #666;
+}
+
+/* Overlay */
+.overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.3);
+    z-index: 2;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s;
+}
+
+.overlay.active {
+    opacity: 1;
+    pointer-events: all;
+}
+
+/* Sidebar styles */
+.sidebar {
+    width: 350px;
+    background-color: var(--sidebar-bg);
+    border-right: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    color: var(--text-color);
+    position: relative;
+    z-index: 3;
+}
+
+.search-bar {
+    padding: 10px;
+    background-color: var(--sidebar-bg);
+    position: relative;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.search-bar input {
+    width: 100%;
+    padding: 10px 15px;
+    border-radius: 20px;
+    border: none;
+    background-color: var(--settings-bg);
+    color: var(--text-color);
+    padding-left: 35px;
+    outline: none;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.search-icon {
+    position: absolute;
+    left: 25px;
+    top: 20px;
+    width: 16px;
+    height: 16px;
+    opacity: 0.8;
+    background-size: contain;
+    background-repeat: no-repeat;
+}
+
+.settings-btn {
+    position: absolute;
+    right: 20px;
+    top: 20px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    width: 20px;
+    height: 20px;
+    opacity: 0.8;
+    background-size: contain;
+    background-repeat: no-repeat;
+}
+
+.chat-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px 0;
+}
+
+.chat-item {
+    padding: 10px 15px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.chat-item:hover {
+    background-color: var(--settings-bg);
+}
+
+.chat-item-avatar {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background-color: #ccc;
+    margin-right: 15px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    color: #fff;
+}
+
+.chat-item-info {
+    flex: 1;
+}
+
+.chat-item-name {
+    font-weight: bold;
+    margin-bottom: 5px;
+    font-size: 1.1em;
+    letter-spacing: 0.5px;
+}
+
+.chat-item-preview {
+    font-size: 0.9em;
+    color: #777;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-family: squids game;
+}
+
+.chat-item-path {
+    font-size: 0.8em;
+    color: var(--path-color);
+    margin-top: 3px;
+    font-family: squids game;
+}
+
+/* Settings panel */
+.settings-panel {
+    position: fixed;
+    left: -250px;
+    top: 0;
+    width: 250px;
+    height: 100%;
+    background-color: var(--settings-bg);
+    z-index: 4;
+    transition: transform 0.3s;
+    padding: 20px;
+    color: var(--text-color);
+    box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
+}
+
+.settings-panel.open {
+    transform: translateX(250px);
+}
+
+.settings-item {
+    margin-bottom: 20px;
+}
+
+.settings-title {
+    font-weight: bold;
+    margin-bottom: 10px;
+    font-size: 1.2em;
+    letter-spacing: 0.5px;
+}
+
+.switch {
+    position: relative;
+    display: inline-block;
+    width: 50px;
+    height: 24px;
+}
+
+.switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #ccc;
+    transition: .4s;
+    border-radius: 24px;
+}
+
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 16px;
+    width: 16px;
+    left: 4px;
+    bottom: 4px;
+    background-color: white;
+    transition: .4s;
+    border-radius: 50%;
+}
+
+input:checked + .slider {
+    background-color: var(--button-color);
+}
+
+input:checked + .slider:before {
+    transform: translateX(26px);
+}
+
+/* Chat area */
+.chat-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+}
+
+.chat-header {
+    padding: 15px;
+    background-color: var(--sidebar-bg);
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    color: var(--text-color);
+    min-height: 60px;
+}
+
+.back-btn {
+    display: none;
+    background: none;
+    border: none;
+    color: var(--button-color);
+    font-size: 1.2em;
+    cursor: pointer;
+    margin-right: 15px;
+}
+
+.chat-title {
+    font-weight: bold;
+    font-size: 1.4em;
+    letter-spacing: 0.5px;
+}
+
+.message-input {
+    padding: 10px 15px;
+    background-color: var(--input-bg);
+    display: flex;
+    align-items: center;
+    border-top: 1px solid var(--border-color);
+    min-height: 60px;
+}
+
+.message-input input {
+    flex: 1;
+    padding: 10px 15px;
+    border-radius: 20px;
+    border: none;
+    background-color: var(--settings-bg);
+    color: var(--text-color);
+    margin-right: 10px;
+    outline: none;
+    font-family: squids game;
+}
+
+.send-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background-color: var(--send-button);
+    border: none;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: transform 0.2s;
+}
+
+.send-btn:hover {
+    transform: scale(1.05);
+}
+
+.send-btn svg {
+    width: 20px;
+    height: 20px;
+}
+
+/* Messages */
+.messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 15px;
+    background-size: cover;
+    background-position: center;
+    display: flex;
+    flex-direction: column;
+}
+
+.message {
+    max-width: 70%;
+    padding: 10px 15px;
+    border-radius: 7px;
+    margin-bottom: 10px;
+    position: relative;
+    word-wrap: break-word;
+    color: var(--text-color);
+    font-family: squids game;
+}
+
+.message-in {
+    background-color: var(--message-bg);
+    align-self: flex-start;
+}
+
+.message-out {
+    background-color: var(--message-out-bg);
+    align-self: flex-end;
+}
+
+/* Responsive styles */
+@media (max-width: 768px) {
+    .sidebar {
+        position: fixed;
+        left: -350px;
+        width: 350px;
+        height: 100%;
+        transition: transform 0.3s;
+        z-index: 10;
+    }
+
+    .sidebar.open {
+        transform: translateX(350px);
+    }
+
+    .back-btn {
+        display: block;
+    }
+
+    .chat-area {
+        width: 100%;
+    }
+}
+
+@media (max-height: 500px) {
+    .chat-header, .message-input {
+        min-height: 50px;
+    }
+}

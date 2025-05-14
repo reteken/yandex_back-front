@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Telegram-like Chat</title>
+    <link rel="stylesheet" href="css/main_page.css">
+    <script src="js/main_page.js" defer></script>
+</head>
+<body class="dark-mode">
+    <!-- Icons and Backgrounds -->
+    <div class="assets" style="display:none;">
+        <img id="search-icon-light" src="img/search.png" alt="Search Icon">
+        <img id="search-icon-dark" src="img/search_white.png" alt="Search Icon White">
+        <img id="settings-icon-light" src="img/settings.png" alt="Settings Icon">
+        <img id="settings-icon-dark" src="img/settings_white.png" alt="Settings Icon White">
+        <img id="bg-light" src="img/background_white.jpg" alt="Light Background">
+        <img id="bg-dark" src="img/background.jpg" alt="Dark Background">
+    </div>
+
+    <!-- Sidebar with chat list -->
+    <div class="sidebar" id="sidebar">
+        <div class="search-bar">
+            <span class="search-icon"></span>
+            <input type="text" placeholder="Search">
+            <button class="settings-btn" id="settingsBtn"></button>
+        </div>
+        <div class="chat-list" id="chatList">
+            <div class="chat-item">
+                <div class="chat-item-avatar">T</div>
+                <div class="chat-item-info">
+                    <div class="chat-item-name">Telegram</div>
+                    <div class="chat-item-preview">Welcome to Telegram!</div>
+                    <div class="chat-item-path">C:\Users\Admin\Documents\Telegram #dark</div>
+                </div>
+            </div>
+            <div class="chat-item">
+                <div class="chat-item-avatar">W</div>
+                <div class="chat-item-info">
+                    <div class="chat-item-name">Work Chat</div>
+                    <div class="chat-item-preview">Meeting at 3pm</div>
+                    <div class="chat-item-path">C:\Work\Projects\Chats #light</div>
+                </div>
+            </div>
+            <div class="chat-item">
+                <div class="chat-item-avatar">F</div>
+                <div class="chat-item-info">
+                    <div class="chat-item-name">Family Group</div>
+                    <div class="chat-item-preview">Mom: Call me later</div>
+                    <div class="chat-item-path">D:\Personal\Family #dark</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Settings panel -->
+        <div class="settings-panel" id="settingsPanel">
+            <div class="settings-item">
+                <div class="settings-title">Name</div>
+                <div>User Name</div>
+            </div>
+            <div class="settings-item">
+                <div class="settings-title">Night Mode</div>
+                <label class="switch">
+                    <input type="checkbox" id="darkModeToggle" checked>
+                    <span class="slider"></span>
+                </label>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Chat area -->
+    <div class="chat-area">
+        <div class="chat-header">
+            <button class="back-btn" id="backBtn">←</button>
+            <div class="chat-title">Selected Chat</div>
+            <div></div>
+        </div>
+        
+        <div class="messages" id="messages">
+            <!-- Messages will appear here -->
+        </div>
+        
+        <div class="message-input">
+            <input type="text" placeholder="Type a message" id="messageInput">
+            <button class="send-btn" id="sendBtn">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                    <path d="M22 2L11 13" stroke="white" stroke-width="2" stroke-linecap="round"/>
+                    <path d="M22 2L15 22L11 13L2 9L22 2Z" fill="white"/>
+                </svg>
+            </button>
+        </div>
+    </div>
+
+    <div class="overlay" id="overlay"></div>
+</body>
+</html>
